@@ -63,11 +63,25 @@ beforeEach(async () => {
   await Blog.insertMany(initialBlogs);
 });
 
-test("blogs are returned as json", async () => {
-  await api
-    .get("/api/blogs")
-    .expect(200)
-    .expect("Content-Type", /application\/json/);
+describe("GET method tests", () => {
+  test("blogs are returned as json", async () => {
+    await api
+      .get("/api/blogs")
+      .expect(200)
+      .expect("Content-Type", /application\/json/);
+  });
+  test("you can get one blog", async () => {
+    const blogToGet = initialBlogs[0]._id;
+    const result = await api
+      .get(`/api/blogs/${blogToGet}`)
+      .expect(200)
+      .expect("Content-Type", /application\/json/);
+    expect(result.body).toMatchObject({
+      title: "React patterns",
+      author: "Michael Chan",
+      url: "https://reactpatterns.com/",
+    });
+  });
 });
 
 describe("post method tests", () => {
@@ -78,13 +92,14 @@ describe("post method tests", () => {
       url: "https://web.dev/open-web-docs/",
       likes: 6,
     };
+    const resultBeforePost = await api.get("/api/blogs");
     await api
       .post("/api/blogs")
       .send(blog)
       .expect(200)
       .expect("Content-Type", /application\/json/);
-    const result = await api.get("/api/blogs");
-    expect(result.body).toHaveLength(initialBlogs.length + 1);
+    const resultAfterPost = await api.get("/api/blogs");
+    expect(resultAfterPost.body).toHaveLength(resultBeforePost.body.length + 1);
   });
   test("a post will have 0 likes by default", async () => {
     const blog = {
@@ -108,6 +123,29 @@ describe("post method tests", () => {
 test("the unique identifier is named id", async () => {
   const res = await api.get("/api/blogs");
   expect(res.body[0].id).toBeDefined();
+});
+
+test("a blog post is deleted", async () => {
+  const idForBlogToDelete = initialBlogs[0]._id;
+
+  const resultBeforeDelete = await api.get("/api/blogs");
+
+  await api.delete(`/api/blogs/${idForBlogToDelete}`).expect(204);
+
+  const resultAfterDelete = await api.get("/api/blogs");
+  expect(resultAfterDelete.body).toHaveLength(
+    resultBeforeDelete.body.length - 1
+  );
+});
+test("the blog likes are up by one", async () => {
+  const idForBlogToUpdate = initialBlogs[0]._id;
+  const resultBeforeUpdate = await api.get(`/api/blogs/${idForBlogToUpdate}`);
+  const blogLikes = {
+    likes: initialBlogs[0].likes + 1,
+  };
+  await api.put(`/api/blogs/${idForBlogToUpdate}`).send(blogLikes).expect(204);
+  const resultAfterUpdate = await api.get(`/api/blogs/${idForBlogToUpdate}`);
+  expect(resultAfterUpdate.body.likes).toBe(resultBeforeUpdate.body.likes + 1);
 });
 afterAll(() => {
   mongoose.connection.close();
